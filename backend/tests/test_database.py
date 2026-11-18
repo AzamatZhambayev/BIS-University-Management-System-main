@@ -33,6 +33,7 @@ async def rejected(db_factory, sql, **params):
 
 # 1
 async def test_all_tables_exist(db_factory):
+    """Проверяет, что миграции создали все 10 нужных таблиц (users, students, courses и т.д.)."""
     async with db_factory() as db:
         rows = await db.scalars(
             text("SELECT table_name FROM information_schema.tables WHERE table_schema='public'")
@@ -54,6 +55,7 @@ async def test_all_tables_exist(db_factory):
 
 # 2
 async def test_database_is_at_latest_migration(db_factory):
+    """Проверяет, что версия схемы в БД совпадает с последней миграцией Alembic."""
     config = Config()
     config.set_main_option("script_location", str(BACKEND / "alembic"))
     head = ScriptDirectory.from_config(config).get_current_head()
@@ -62,6 +64,7 @@ async def test_database_is_at_latest_migration(db_factory):
 
 # 3
 async def test_query_indexes_exist(db_factory):
+    """Проверяет, что в БД есть индексы для частых запросов (расписание, места, студенты)."""
     async with db_factory() as db:
         names = set(
             await db.scalars(text("SELECT indexname FROM pg_indexes WHERE schemaname='public'"))
@@ -78,6 +81,7 @@ async def test_query_indexes_exist(db_factory):
 
 # 4
 async def test_email_must_be_lowercase(db_factory):
+    """Проверяет, что БД отклоняет email с заглавными буквами (CHECK-ограничение)."""
     await rejected(
         db_factory,
         "INSERT INTO users (email,password_hash,role) VALUES ('Mixed@Example.edu',:h,'STUDENT')",
@@ -87,6 +91,7 @@ async def test_email_must_be_lowercase(db_factory):
 
 # 5
 async def test_role_must_be_known(db_factory):
+    """Проверяет, что БД отклоняет неизвестную роль пользователя (допустимы только известные)."""
     await rejected(
         db_factory,
         "INSERT INTO users (email,password_hash,role) VALUES ('guest@example.edu',:h,'GUEST')",
@@ -96,6 +101,7 @@ async def test_role_must_be_known(db_factory):
 
 # 6
 async def test_course_credits_boundaries(data, db_factory):
+    """Проверяет границы кредитов курса: 0 и 31 отклоняются, 1 и 30 принимаются."""
     insert = "INSERT INTO courses (course_code,course_title,credits) VALUES (:c,'Title',:n)"
     for code, credits in [("LOW", 0), ("HIGH", 31)]:
         await rejected(db_factory, insert, c=code, n=credits)
@@ -107,6 +113,7 @@ async def test_course_credits_boundaries(data, db_factory):
 
 # 7
 async def test_course_code_and_semester_name_are_unique(data, db_factory):
+    """Проверяет уникальность кода курса и названия семестра (дубликаты отклоняются)."""
     await rejected(
         db_factory,
         "INSERT INTO courses (course_code,course_title,credits) VALUES ('CS101','Copy',3)",
@@ -120,6 +127,7 @@ async def test_course_code_and_semester_name_are_unique(data, db_factory):
 
 # 8
 async def test_section_number_is_unique_within_course_and_semester(data, db_factory):
+    """Номер секции уникален в паре курс+семестр, а в другом семестре допустим."""
     insert = (
         "INSERT INTO course_sections (course_id,semester_id,section_number,capacity) "
         "VALUES (:course,:semester,:number,10)"
@@ -133,6 +141,7 @@ async def test_section_number_is_unique_within_course_and_semester(data, db_fact
 
 # 9
 async def test_cascades_remove_meetings_and_refresh_tokens(data, db_factory):
+    """Каскады: удаление секции убирает её занятия, удаление сессии убирает refresh-токены."""
     section = data.sections[5]  # MULTI: two weekly meetings
     count_meetings = "SELECT count(*) FROM section_meetings WHERE section_id=:s"
     assert await scalar(db_factory, count_meetings, s=section) == 2
@@ -149,6 +158,7 @@ async def test_cascades_remove_meetings_and_refresh_tokens(data, db_factory):
 
 # 10
 async def test_referenced_rows_cannot_be_deleted(data, db_factory):
+    """Защита внешних ключей: нельзя удалить курс, семестр, студента или учителя с зависимостями."""
     await enroll(data.actors[0], data.sections[0], data.semesters[0])
     await rejected(db_factory, "DELETE FROM courses WHERE course_id=:i", i=data.course)
     await rejected(db_factory, "DELETE FROM semesters WHERE semester_id=:i", i=data.semesters[0])
