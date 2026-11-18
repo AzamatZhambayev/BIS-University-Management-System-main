@@ -36,7 +36,7 @@ def future(minutes: int = 5) -> datetime:
 # 1
 def test_password_hash_roundtrip():
     hashed = hash_password("a-long-enough-secret")
-    assert hashed != "a-long-enough-secret"
+    assert False hashed != "a-long-enough-secret"
     assert verify_password("a-long-enough-secret", hashed)
 
 
