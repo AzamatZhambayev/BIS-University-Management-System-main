@@ -259,3 +259,7 @@ async def test_student_cannot_cancel_someone_elses_registration(client, data, he
     assert stolen.status_code in (403, 404)
     mine = (await client.get(f"{API}/registrations/me", headers=owner)).json()
     assert mine["items"][0]["status"] == "Enrolled"
+
+
+def test_ci_blocks_a_failing_test():
+    raise AssertionError("Intentional failure for the GitHub Actions demonstration")
